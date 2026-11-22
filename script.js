@@ -710,6 +710,7 @@ function gen() {
   const S = speedAt(chain), D0 = S * T, dif = Math.min(1, chain / 60);   // S：生成用跑速（不受 Fever 固定速度影響）；D0：一次完整跳躍的水平距離
   while (cur < scroll + W + GEN_AHEAD) {
     const fst = first; let kind = first ? 'flat' : weighted(difWeights(dif));
+    let upFrom = null;   // 往上換層時，上一層從這裡開始有地面
     let ap = null;   // 二段跳類區段：改用實際物理規劃軌跡；做不到（關掉二段跳、最上層沒空間、跳不夠遠）就改成一般斷層
     if (['gap2', 'ice', 'iceChain'].includes(kind)) { ap = airPlan(LY[L], T * .8) || airBest(LY[L]); if (!ap || ap.tl * S < D0 * 1.25 + 40) kind = 'gap'; }
     if ((kind === 'dive' || kind === 'diveIce') && (L !== 2 || CFG.AIR_JUMPS < 1)) kind = 'gap';   // 虛空只有最下層才會真的掉死，其他層掉下去只是換層
@@ -800,7 +801,7 @@ function gen() {
       const ds = []; if (L > 0) ds.push(-1); if (L < 2) ds.push(1);
       const d = pick(ds); newL = L + d; const YB = LY[newL];
       if (d < 0) {   // 往上一層：沿跳躍軌跡
-        const js = cur + 220; openLane(newL, js + 20); lead(cur + 70, 3, 50); arc(js + S * T / 2, [.17, .27, .37, .47, .57]);   // 上一層從這裡開始出現
+        const js = cur + 220; upFrom = js + 20; openLane(newL, js + 20); lead(cur + 70, 3, 50); arc(js + S * T / 2, [.17, .27, .37, .47, .57]);   // 上一層從這裡開始出現
         lead(js + 230, 3, 50, YB - 28); addGap(L, js + 40, js + 360); end = js + 420;
       } else {       // 往下一層：走出缺口自然掉落，5 顆球沿著掉落軌跡與落地後排列
         const E = R20(cur + 260), g = mkg(); openLane(newL, cur); lead(cur + 60, 3, 45);
@@ -809,6 +810,11 @@ function gen() {
         addGap(L, E, E + 300); end = E + 360;
       }
     }
+    // 三層地面常駐時，跳起來的玩家會「落到頭上那一層」而偏離這段地圖的路線（球、陷阱都排在目前這層）→ 在這段路線正上方那一層挖洞；
+    // 往上換層的區段，上一層從 upFrom 才開始有地面（洞只挖到那裡），再上面一層照樣挖洞
+    const holeA = cur - 80, holeB = end + 40;
+    if (L >= 1 && laneOn[L - 1]) addGap(L - 1, holeA, upFrom != null ? upFrom : holeB);
+    if (upFrom != null && L >= 2 && laneOn[L - 2]) addGap(L - 2, holeA, holeB);
     const others = [0, 1, 2].filter(x => x !== L && x !== newL && laneOn[x]);   // 沒走的那層隨機斷裂（誘餌）
     if (!fst && Math.random() < MAP.decoy && others.length) { const a = cur + r(100, Math.max(120, end - cur - 260)); addGap(pick(others), a, a + r(160, 240)); }
     L = newL; cur = end;
@@ -1159,7 +1165,13 @@ function update(dt) {
   if (updateEnemies(dt, pc) && invul <= 0 && fly <= 0 && !status.shield) { hurtPlayer(CFG.TRAP_DMG); if (state !== 'play') return; }   // 飛行中不受陷阱影響（虛空本來就不判定）
   if (fly > 0 || status.magnet) for (const o of orbs) if (o.x > scroll - 40 && o.x < scroll + W) { o.x += (pc - o.x) * Math.min(1, dt * 9); o.y += (py - 30 - o.y) * Math.min(1, dt * 9); }   // 傳令兵：吸取所有能量球
   collectOrbs(pc);
-  if (feverPending) { feverPending = false; if (ph === 'fight' && !fever && !enemy.dead) startFever(); }
+  if (feverPending) {   // chain 達 10／20／30… 的 Fever：不能因為剛好遇到敵人準備攻擊（prep）或特殊地圖就被丟掉
+    if (enemy.dead || fever) feverPending = false;
+    else {
+      if (ph === 'prep' && !enemy.openQ.length) { genPause = false; ph = 'fight'; }   // 敵人等著發動時，Fever 優先（Fever 結束後敵人才繼續；與額外 Fever 相同）
+      if (ph === 'fight') { feverPending = false; startFever(); }                    // 特殊地圖（special）／波次過場（trans）中則保留到回到 fight 再開
+    }
+  }
   if (fever && pc >= feverEnd) fever = false;
   if (feverBonus > 0 && ph === 'prep' && !fever && !enemy.dead && !enemy.openQ.length) { genPause = false; ph = 'fight'; }   // 敵人已冷卻完、等待發動時，我方額外 Fever 優先（Fever 結束後敵人才繼續）
   if (feverBonus > 0 && ph === 'fight' && !fever && !enemy.dead) { feverBonus--; feverPendMs = []; startFever(); }   // 技能贈送的額外 Fever：不占用 10／20／30… 區段，目前 Fever 結束後（或安全地圖結束後）接著開
