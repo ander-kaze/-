@@ -1,0 +1,242 @@
+:root{--fg:#e9edff;--sub:#8f98c4;--card:#12122b;--accent:#62d0ff;--accent2:#a56bff;--line:#2d2d62;--bg:#05050f;--panel:#0d0d24;--ink:#e9edff;--tint:#1f1d4d;--soft:#1a1a3a}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{overflow-x:clip}
+body{
+  background:
+    radial-gradient(circle at 85% 8%,rgba(70,110,255,.22),transparent 45%),
+    radial-gradient(circle at 8% 95%,rgba(150,80,255,.20),transparent 45%),
+    linear-gradient(rgba(120,140,255,.05) 1px,transparent 1px) 0 0/72px 72px,
+    linear-gradient(90deg,rgba(120,140,255,.05) 1px,transparent 1px) 0 0/72px 72px,
+    var(--bg);
+  background-attachment:fixed;color:var(--fg);
+  font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+button{font:inherit;color:inherit;cursor:pointer}
+
+/* 畫面切換 */
+.screen{display:none;min-height:100%;width:min(100%,960px);margin:0 auto;padding:12px;flex-direction:column;align-items:center;gap:14px}
+.screen.active{display:flex}
+header{display:flex;align-items:center;gap:12px;width:100%}
+header h2{margin:0;font-size:22px}
+.back,.primary,.keybtn,.stage-btn{padding:10px 16px;border-radius:12px;border:2px solid var(--line);background:var(--card)}
+.back:hover,.primary:hover,.keybtn:hover,.stage-btn:hover{border-color:var(--accent)}
+.primary{background:linear-gradient(135deg,#7c4dff,#2f8cff);color:#fff;border-color:#8fb4ff;font-weight:700;text-shadow:0 1px 4px rgba(0,0,40,.5)}
+.primary:hover{filter:brightness(1.15);border-color:#fff}
+.primary{font-size:18px;min-width:160px}
+.infobox{width:100%;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:14px;line-height:1.7}
+.infobox hr{border:0;border-top:1px solid var(--line)}
+small{color:var(--sub)}
+
+/* 初始介面 */
+#title{justify-content:center}
+h1{font-size:clamp(26px,6vw,48px);margin:0;color:var(--ink);text-align:center}
+/* 初始介面：標題在畫面正中央（上下兩列等高 1fr 夾住標題），選單排在標題下方 */
+#title.active{display:grid;grid-template-rows:1fr auto 1fr;justify-items:center;align-items:center;gap:0;min-height:100vh;min-height:100dvh;position:relative}
+#title::before{content:"";position:fixed;left:50%;top:50%;width:min(140vw,1700px);aspect-ratio:2/1;transform:translate(-50%,-50%);pointer-events:none;
+  background:radial-gradient(closest-side,rgba(90,110,255,.30),rgba(150,70,255,.14) 55%,transparent 100%)}
+#title>*{position:relative;z-index:1}
+h1.logo{grid-row:2;margin:0;width:min(98vw,1280px);line-height:0}
+/* 標題圖已去背（黑底轉透明），發光的字與光帶直接疊在背景上 */
+.logo img{display:block;width:100%;max-height:52vh;object-fit:contain;margin:0 auto;pointer-events:none;
+  animation:logoIn .9s cubic-bezier(.2,.9,.25,1) both,neon 3.4s ease-in-out .9s infinite alternate}
+@keyframes logoIn{from{opacity:0;transform:translateX(-110px) skewX(-14deg) scale(.95);filter:brightness(2.2) blur(6px)}to{opacity:1;transform:none;filter:none}}
+@keyframes neon{from{filter:brightness(1)}to{filter:brightness(1.22)}}
+@media (prefers-reduced-motion:reduce){.logo img{animation:none}}
+@media (max-width:600px){h1.logo{width:106vw}}
+
+/* 初始介面 */
+.menu{grid-row:3;align-self:start;margin-top:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:min(760px,92vw)}
+.menu button{padding:12px 8px;border-radius:12px;border:2px solid #4a55c9;background:rgba(14,14,40,.82);font-size:18px;font-weight:700;letter-spacing:2px;box-shadow:0 0 14px rgba(80,110,255,.28),inset 0 0 12px rgba(120,90,255,.18);transition:transform .12s,box-shadow .12s,border-color .12s,background .12s}
+.menu button:hover{border-color:var(--accent);background:rgba(36,34,90,.9);transform:translateY(-3px);box-shadow:0 0 22px rgba(98,208,255,.55),inset 0 0 14px rgba(165,107,255,.3)}
+.menu button:active{transform:translateY(1px)}
+.menu .soon{opacity:.6}
+@media (max-width:560px){.menu{grid-template-columns:repeat(2,1fr)}}
+
+/* 副本模式 */
+#dungeon-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;width:100%}
+.card{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:10px;text-align:left}
+.card:hover{border-color:var(--accent)}
+.card-img{height:110px;border-radius:10px;background:#2a2a5a;display:grid;place-items:center;color:var(--sub);overflow:hidden}
+.card-img img{width:100%;height:100%;object-fit:cover}
+.card-name{margin-top:8px;font-weight:700}
+
+/* 由下往上彈出的視窗（關卡選擇、角色庫共用） */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:5;visibility:hidden;opacity:0;transition:opacity .25s,visibility .25s}
+.sheet-bg.open{visibility:visible;opacity:1}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-width:960px;max-height:80%;overflow:auto;margin:0 auto;background:var(--panel);box-shadow:0 -6px 30px rgba(80,110,255,.25);border-radius:18px 18px 0 0;padding:16px;transform:translateY(100%);transition:transform .25s}
+.sheet-bg.open .sheet{transform:none}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:18px}
+.x{border:0;background:none;font-size:22px}
+#stage-list{display:flex;flex-direction:column;gap:10px}
+.stage-btn{text-align:left;font-size:17px}
+
+/* 編隊 */
+#slots{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;width:100%}
+.slot{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:2px solid transparent;border-radius:12px;padding:6px 2px}
+.slot.sel{border-color:var(--accent);background:var(--tint)}
+.slot-name{font-size:13px;color:var(--sub)}
+.icon{position:relative;width:clamp(44px,10vw,72px);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:24px;border:3px solid rgba(255,255,255,.4)}
+.icon img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+.icon.empty{background:var(--soft);color:var(--sub)}
+.badge{position:absolute;left:-6px;top:-6px;width:24px;height:24px;border-radius:50%;font-size:13px;display:grid;place-items:center;color:#111;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+#party-info{min-height:120px}
+#roster-grid,#gacha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px}
+.rcard{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--card);border:2px solid var(--line);border-radius:12px;padding:10px 6px}
+.rcard:hover{border-color:var(--accent)}
+.rname{font-weight:700}
+.rdesc{font-size:12px;color:var(--sub)}
+
+/* 設定 */
+.settings-box{display:flex;flex-direction:column;gap:14px}
+.row{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.row input[type=range]{flex:1;max-width:320px}
+.keybtn{min-width:120px}
+
+/* 遊玩介面 */
+#game{width:100%;padding:6px;gap:6px;justify-content:center}
+#stage{position:relative;display:inline-block;line-height:0;max-width:100%}
+canvas{display:block;width:min(calc(100vw - 12px),calc((100vh - 64px) * 1.8947));height:auto;aspect-ratio:1440/760;margin:0 auto;border-radius:12px;touch-action:none;background:#8ecae6;box-shadow:0 0 0 2px #4a55c9,0 0 28px rgba(98,208,255,.3)}   /* 依視窗高度或寬度取較小者，填滿畫面 */
+#result{color:#ece8f5;position:absolute;inset:0;background:rgba(15,12,25,.82);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;line-height:1.6;text-align:center}
+#result[hidden]{display:none}
+#result h2{margin:0;font-size:30px}
+#result p{margin:0 0 6px}
+#quit{padding:6px 14px;font-size:14px}
+
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;color:#fff;padding:8px 18px;border-radius:20px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
+#toast.on{opacity:1}
+
+/* ===== 新增：角色庫／角色展示／商店／編成 ===== */
+header .hint{color:var(--sub);font-size:13px;margin-left:auto}
+header .hint+.back{margin-left:0}
+.lstar,.slot-name{font-size:12px;color:var(--sub)}
+#lib-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;width:100%}
+.lcard{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:2px solid transparent;border-radius:12px;padding:6px 2px}
+.lcard:hover{border-color:var(--accent)}
+.empty{color:var(--sub);grid-column:1/-1;text-align:center}
+
+/* 角色詳情版面 */
+.detail-wrap{display:grid;grid-template-columns:1fr 1.2fr;gap:14px;width:100%}
+.d-left{position:relative}
+.d-btns{position:absolute;left:8px;bottom:8px;display:flex;flex-direction:column;gap:8px}
+.d-btns .primary{min-width:0;font-size:15px;padding:8px 14px}
+.d-right{display:flex;flex-direction:column;gap:10px}
+.d-right h3{margin:0;font-size:22px}
+#d-stars{color:#ffd166}
+.shop-box{display:flex;flex-direction:column;gap:14px}
+.gline{padding:8px 12px;margin:6px 0;border-left:6px solid;background:var(--card);border-radius:8px}
+.dlg-btns{margin-top:12px}
+#dlg-bg{z-index:8}
+
+/* ===== 角色庫／詳情／商店／編成 ===== */
+.grow{flex:1;color:var(--sub);font-size:13px}
+header{flex-wrap:wrap}
+#own-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;width:100%}
+.cell{display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--card);border:2px solid var(--line);border-radius:12px;padding:10px 4px}
+.cell:hover{border-color:var(--accent)}
+.stars{color:#ffd166;letter-spacing:2px}
+.icon.big{width:clamp(54px,12vw,84px)}
+.icon .ph{font-size:.55em;text-align:center;line-height:1.1}
+.icon img{position:absolute;inset:0}
+.slot-no{font-size:12px;color:var(--sub)}
+#roster-grid,#gacha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px}
+#d-body{display:flex;gap:14px;width:100%;flex-wrap:wrap;justify-content:center}
+#d-left{flex:1 1 340px;display:flex;flex-direction:column;align-items:center;gap:10px}
+#d-portrait{width:100%;display:flex;justify-content:center}
+
+/* 立繪：容器透明，圖片完整顯示 */
+.portrait{
+  position:relative;
+  width:100%;
+  aspect-ratio:3/4;
+  max-height:70vh;
+  margin:0 auto;
+  border-radius:14px;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  border:2px solid var(--line);
+  background:transparent;
+}
+.portrait img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  object-position:center;
+  background:transparent;
+}
+.portrait .ph{font-size:22px;font-weight:700;padding:12px;text-align:center}
+#d-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+#d-actions .primary{min-width:0;font-size:16px;padding:10px 14px}
+#d-info{flex:1.4 1 300px;display:flex;flex-direction:column;gap:10px}
+#d-info h3{margin:0;font-size:22px}
+.stat-row{display:flex;gap:14px;flex-wrap:wrap;background:var(--card);border-radius:10px;padding:8px 12px}
+.box{background:var(--card);border:2px solid var(--line);border-radius:12px;padding:10px 12px;line-height:1.6}
+#shop-body{display:flex;flex-direction:column;gap:12px;width:100%}
+#dlg-ok{margin-top:12px}
+#dlg-body{line-height:1.8}
+@media (max-width:600px){#lib-grid{grid-template-columns:repeat(4,1fr)}.detail-wrap{grid-template-columns:1fr}}
+@media (max-width:560px){#own-grid{gap:6px}.cell{padding:6px 2px}}
+
+.mat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;margin-top:10px}
+.rcard.picked{border-color:var(--accent);background:var(--tint);box-shadow:0 0 0 2px var(--accent) inset}
+#dlg-ok:disabled{opacity:.4;cursor:not-allowed}
+
+/* ===== 遊玩前導 ===== */
+#guide-btn{position:fixed;right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));font-size:15px;padding:8px 14px}
+#guide-bg{z-index:8}
+#guide-body{display:flex;flex-direction:column;gap:10px;line-height:1.8}
+#guide-body details{background:var(--card);border:2px solid var(--line);border-radius:12px;padding:8px 12px}
+#guide-body summary{cursor:pointer;font-weight:700;font-size:17px}
+#guide-body ul{margin:8px 0 4px;padding-left:20px}
+#guide-body li{margin:4px 0}
+
+/* ===== 副本：關卡展開資訊 ===== */
+.stage-item{display:flex;flex-direction:column;gap:8px}
+.stage-head{display:flex;justify-content:space-between;align-items:center;width:100%}
+.chev{color:var(--accent);margin-left:10px}
+.stage-body{background:var(--card);border:2px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;line-height:1.5}
+.waves{display:flex;gap:6px;width:100%}
+.wave-cell{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;border:1px solid var(--line);border-radius:10px;padding:6px 4px;font-size:clamp(10px,calc(16px - var(--n) * 1px),15px)}
+.wave-cell .icon{width:min(100%,56px)}
+.wave-no{color:var(--sub)}
+.phase-tip{color:#ff9f1c;font-weight:700}
+.stage-sec{display:flex;flex-direction:column;gap:4px}
+.stage-sec>b{color:var(--accent)}
+.elem-chip{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;color:#111;font-weight:700;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);margin-right:6px}
+.rw.done{opacity:.5}
+.tag{background:var(--accent);color:#06101f;border-radius:6px;padding:0 6px;font-size:.85em;margin-left:4px}
+.stage-body .primary{align-self:center}
+
+/* ===== 編成：替換角色比較 ===== */
+#pick-bg .sheet{max-width:1100px;max-height:96%}
+#pick-cmp{margin-bottom:10px}
+#pick-bar{position:sticky;bottom:-16px;margin:8px -16px -16px;padding:10px;background:var(--panel);border-top:1px solid var(--line);text-align:center}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cmp-panel{background:var(--card);border:2px solid var(--line);border-radius:12px;padding:8px;font-size:13px;line-height:1.5;min-width:0}
+.cmp-title{color:var(--sub);margin-bottom:4px}
+.cmp-top{display:flex;gap:8px;align-items:center}
+.cmp-av{display:flex;flex-direction:column;align-items:center;gap:2px}
+.cmp-empty{color:var(--sub);padding:18px 4px;text-align:center}
+.cmp-panel .box{padding:6px 8px;margin-top:6px}
+@media (max-width:480px){.cmp-panel{font-size:12px}}
+
+/* ===== 商店 ===== */
+.ticket{position:relative}
+.info-btn{position:absolute;right:12px;top:12px;width:30px;height:30px;border-radius:50%;border:2px solid var(--accent);background:none;color:var(--accent);font-weight:700;font-style:italic}
+.pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;margin-bottom:10px}
+.rcard.unowned{filter:grayscale(1);opacity:.5}
+
+/* ===== 篩選（角色庫／編成替換共用） ===== */
+.head-r{display:flex;align-items:center;gap:8px}
+.frow{display:flex;align-items:center;gap:12px;padding:8px 0}
+.flabel{color:var(--sub);min-width:52px}
+.fchips{display:flex;flex-wrap:wrap;gap:8px}
+.fchip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:2px solid var(--line);background:none}
+.fchip small{color:var(--sub)}
+.fchip.on{border-color:var(--accent);background:var(--tint)}
+.fdot{width:14px;height:14px;border-radius:50%;display:inline-block}
+.flink{background:none;border:0;color:var(--sub);text-decoration:underline;margin-top:6px}
