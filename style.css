@@ -102,6 +102,10 @@ h1.logo{grid-row:2;margin:0;width:min(98vw,1280px);line-height:0}
 .row{display:flex;align-items:center;gap:12px;justify-content:space-between}
 .row input[type=range]{flex:1;max-width:320px}
 .keybtn{min-width:120px}
+.seg{display:inline-flex;border:2px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{padding:10px 14px;border:0;background:var(--card)}
+.seg button+button{border-left:2px solid var(--line)}
+.seg button.on{background:linear-gradient(135deg,#7c4dff,#2f8cff);color:#fff;font-weight:700}
 
 /* 遊玩介面 */
 #game{width:100%;padding:6px;gap:6px;justify-content:center}

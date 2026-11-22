@@ -174,9 +174,10 @@ function getImg(src) {   // 圖片尚未載入或失敗時回傳 null，由呼�
   return e.ok ? e.i : null;
 }
 const SAVE_KEY = 'qunyou-game-v2';
-const save = { settings: { volume: .7, keys: { up: 'w', down: 's' } }, party: [...DEFAULT_PARTY], bests: {},
+const save = { settings: { volume: .7, keys: { up: 'w', down: 's' }, touch: 'ud' }, party: [...DEFAULT_PARTY], bests: {},
   owned: {}, skillLv: {}, skillProg: {}, shards: 0, coins: CFG.START_COINS, tickets: { normal: CFG.START_TICKETS } };
 try { Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); save.settings.keys = { up: 'w', down: 's', ...save.settings.keys }; } catch (e) {}
+save.settings.touch = save.settings.touch === 'lr' ? 'lr' : 'ud';   // 手機操作：ud＝上下分割（上跳下掉）、lr＝左右分割（右跳左掉）；舊存檔沒有這項時用 ud
 CHARACTERS.forEach(c => { if (c.star === 3 && !save.owned[c.id]) save.owned[c.id] = 1; });   // 三星角色免費
 save.party = (save.party || []).slice(0, CFG.PARTY_SIZE).map(id => charById(id) && save.owned[id] > 0 ? id : null);
 while (save.party.length < CFG.PARTY_SIZE) save.party.push(null);
@@ -512,7 +513,11 @@ function useTicket(s) {
 function renderSettings() {
   $('#vol').value = Math.round(save.settings.volume * 100); $('#vol-v').textContent = $('#vol').value;
   ['up', 'down'].forEach(k => $('#key-' + k).textContent = keyLabel(save.settings.keys[k]));
+  $$('#touch-seg button').forEach(b => b.classList.toggle('on', b.dataset.touch === save.settings.touch));
+  $('#touch-hint').textContent = TOUCH_HINT[save.settings.touch];
 }
+const TOUCH_HINT = { ud: '上半螢幕＝跳躍（空中再點＝二段跳）、下半螢幕＝往下掉', lr: '右半螢幕＝跳躍（空中再點＝二段跳）、左半螢幕＝往下掉（可雙手同時操作）' };
+$$('#touch-seg button').forEach(b => b.onclick = () => { save.settings.touch = b.dataset.touch; persist(); renderSettings(); });
 $('#vol').oninput = e => { save.settings.volume = e.target.value / 100; SFX.setVolume(save.settings.volume); $('#vol-v').textContent = e.target.value; persist(); };
 $('#vol').onchange = () => SFX.orb(3);
 ['up', 'down'].forEach(k => $('#key-' + k).onclick = () => { bindingFor = k; $('#key-' + k).textContent = '請按下按鍵…'; });
@@ -839,9 +844,14 @@ cv.addEventListener('pointerdown', e => {
   SFX.unlock();
   const b = cv.getBoundingClientRect(), x = (e.clientX - b.left) * W / b.width, y = (e.clientY - b.top) * H / b.height;
   if (y >= PANEL_Y) { team.forEach(m => { if (Math.hypot(x - slotX(m.slot), y - (PANEL_Y + 66)) < 48) useSkill(m.slot); }); return; }   // 點角色圖示＝發動技能
-  if (y < (LY[0] + LY[1]) / 2 || state !== 'play') press(); else { dropReq = true; keyS = true; }
+  // 手機操作模式（設定裡可選）：ud＝上半跳、下半往下掉；lr＝右半跳、左半往下掉。還沒開始（準備畫面）時，點哪裡都是開始
+  const drop = state === 'play' && (save.settings.touch === 'lr' ? x < W / 2 : y >= (LY[0] + LY[1]) / 2);
+  if (!drop) press(); else { dropReq = true; keyS = true; dropPtrs.add(e.pointerId); }
 });
-addEventListener('pointerup', () => { keyS = false; });
+// 以 pointerId 記錄「正在按著往下掉」的手指：左右分割時右手放開跳躍，不會誤把左手還按著的往下掉取消
+const dropPtrs = new Set();
+const endPtr = e => { if (dropPtrs.delete(e.pointerId)) keyS = dropPtrs.size > 0; };
+addEventListener('pointerup', endPtr); addEventListener('pointercancel', endPtr);
 
 /* ----- 結算 ----- */
 function showResult(win) {
@@ -1038,6 +1048,7 @@ function draw() {
     ctx.fillStyle = 'rgba(15,12,25,.65)'; ctx.fillRect(0, 0, W, PANEL_Y);
     txt('準備好了嗎？', W / 2, 280, 38, '#fff', 700, 'center'); txt(`按 ${keyLabel(save.settings.keys.up)} 或點擊畫面開始`, W / 2, 326, 22, '#ffd166', 700, 'center');
     txt('吃同屬性能量球填滿角色能量條　技能：按 1~6 或點下方角色', W / 2, 366, 17, '#cfc8dd', 400, 'center');
+    txt('手機操作：' + TOUCH_HINT[save.settings.touch] + '（可在「設定」更改）', W / 2, 400, 17, '#cfc8dd', 400, 'center');
   }
 }
 

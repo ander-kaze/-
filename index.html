@@ -99,6 +99,8 @@
     <label class="row">音量 <input id="vol" type="range" min="0" max="100"><span id="vol-v"></span></label>
     <div class="row">跳躍（上）<button id="key-up" class="keybtn"></button></div>
     <div class="row">往下掉（下）<button id="key-down" class="keybtn"></button></div>
+    <div class="row">手機操作（跑酷）<span id="touch-seg" class="seg"><button data-touch="ud">上下分割</button><button data-touch="lr">左右分割</button></span></div>
+    <small id="touch-hint"></small>
     <small>點選按鍵按鈕後，再按下想使用的鍵。技能固定為 1～6（對應 1～6 號位），Esc 離開關卡。</small>
   </div>
 </section>
@@ -121,7 +123,7 @@
     <div class="sheet-head"><b>遊玩前導</b><button class="x">✕</button></div>
     <div id="guide-body">
       <details open><summary>基本地圖</summary><ul>
-        <li>畫面分成三層地面，地面會出現缺口。跳躍鍵（預設 W）可跳，空中再按一次可二段跳；下鍵（預設 S）往下一層掉。手機點畫面上半跳、下半往下掉。</li>
+        <li>畫面分成三層地面，地面會出現缺口。跳躍鍵（預設 W）可跳，空中再按一次可二段跳；下鍵（預設 S）往下一層掉。手機預設點畫面上半跳、下半往下掉（可在「設定」改成右半跳、左半往下掉）。</li>
         <li>吃能量球：屬性球填滿同屬性角色的能量條，彩虹球填滿全員，粉色恢復球回血。能量條滿了，角色就會出手。</li>
         <li>吃完一整串球 chain +1。chain 越高，傷害越高、跑得越快；每 10 chain 會迎來一次 Fever。</li>
         <li>金剋木、木剋土、土剋水、水剋火、火剋金，克制傷害更高。</li>
