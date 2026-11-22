@@ -38,6 +38,7 @@ h1{font-size:clamp(26px,6vw,48px);margin:0;color:var(--ink);text-align:center}
 .load-title{letter-spacing:.2em;text-shadow:0 0 18px rgba(98,208,255,.7),0 0 42px rgba(165,107,255,.55)}
 .load-bar{width:min(80%,420px);height:10px;border-radius:99px;background:var(--soft);border:1px solid var(--line);overflow:hidden}
 .load-bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .15s ease-out}
+.load-item{margin:0;width:min(86%,460px);min-height:1.6em;text-align:center;color:var(--fg);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .load-text{margin:0;color:var(--sub);font-size:14px}
 
 /* 初始介面：標題在畫面正中央（上下兩列等高 1fr 夾住標題），選單排在標題下方 */

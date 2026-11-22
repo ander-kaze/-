@@ -2,6 +2,7 @@
 /* =====================================================================
    陣躍出擊 — loader.js（首次載入：預載圖片，讀完才進入主選單）
    - 圖片清單由 CHARACTERS（頭像／立繪）與 DUNGEONS（副本圖／敵人圖）自動蒐集，新增內容不必改這裡
+   - 畫面會顯示進度條、百分比，以及目前正在載入的項目（例如「正在載入：祝你順心 楠雪（敵人立繪）」）
    - 載入結果寫進 script.js 的圖片快取 IMG：遊戲畫面（Canvas）之後取圖是即時的，不會再出現「圖還沒到」的預設圖
    - 檔案不存在（還沒放素材）或載入失敗只會略過，不會卡住；單張圖 20 秒沒回應也直接放行
    - 網路很慢時，8 秒後會出現「略過」按鈕，沒載完的圖會繼續在背景載
@@ -12,17 +13,20 @@
   const IMG_TIMEOUT = 20000;  // 單張圖等多久就放行(ms)
   const SKIP_AFTER = 8000;    // 多久後顯示「略過」(ms)
 
-  const fill = $('#load-fill'), text = $('#load-text'), bar = $('#load-bar'), skip = $('#load-skip');
+  const fill = $('#load-fill'), text = $('#load-text'), item = $('#load-item'), bar = $('#load-bar'), skip = $('#load-skip');
   let entered = false;
   const enter = () => { if (entered) return; entered = true; show('title'); };
 
-  // 蒐集所有要預載的圖（去重）
+  // 蒐集所有要預載的圖（去重），回傳 [[路徑, 顯示名稱], …]；同一張圖以先出現的名稱為準
   function collect() {
-    const set = new Set(['assets/title.png']);   // 主選單標題圖
-    const add = s => { if (s) set.add(s); };
-    CHARACTERS.forEach(c => { add(c.icon); add(c.portrait); });
-    DUNGEONS.forEach(d => { add(d.image); d.stages.forEach(s => (s.waves || []).forEach(w => { add(w.image); add(w.portrait); })); });
-    return [...set];
+    const map = new Map([['assets/title.png', '標題圖']]);   // 主選單標題圖
+    const add = (src, label) => { if (src && !map.has(src)) map.set(src, label); };
+    CHARACTERS.forEach(c => { add(c.icon, `${c.name}（頭像）`); add(c.portrait, `${c.name}（立繪）`); });
+    DUNGEONS.forEach(d => {
+      add(d.image, `${d.name}（副本圖）`);
+      d.stages.forEach(s => (s.waves || []).forEach(w => { add(w.image, `${w.name}（敵人圖示）`); add(w.portrait, `${w.name}（敵人立繪）`); }));
+    });
+    return [...map];
   }
 
   // 載入單張並放進 IMG 快取；不論成功、失敗、逾時都會 resolve（不阻擋流程）
@@ -59,13 +63,15 @@
     skip.onclick = enter;
     const worker = async () => {
       while (next < list.length) {   // 按了「略過」之後也會繼續載完，只是不再擋住畫面
-        await loadOne(list[next++]);
+        const [src, label] = list[next++];
+        item.textContent = `正在載入：${label}`;   // 同時有多張在下載時，顯示最新開始的那一張
+        await loadOne(src);
         setProgress(++done, total);
       }
     };
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, worker));
     clearTimeout(tmSkip);
-    text.textContent = '載入完成';
+    text.textContent = '載入完成'; item.textContent = '準備進入遊戲…';
     setTimeout(enter, 200);   // 讓「100%」停一下再切畫面
   }
 
