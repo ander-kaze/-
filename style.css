@@ -33,6 +33,13 @@ small{color:var(--sub)}
 /* 初始介面 */
 #title{justify-content:center}
 h1{font-size:clamp(26px,6vw,48px);margin:0;color:var(--ink);text-align:center}
+/* 首次載入畫面（loader.js） */
+#loading.active{justify-content:center;min-height:100vh;min-height:100dvh}
+.load-title{letter-spacing:.2em;text-shadow:0 0 18px rgba(98,208,255,.7),0 0 42px rgba(165,107,255,.55)}
+.load-bar{width:min(80%,420px);height:10px;border-radius:99px;background:var(--soft);border:1px solid var(--line);overflow:hidden}
+.load-bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .15s ease-out}
+.load-text{margin:0;color:var(--sub);font-size:14px}
+
 /* 初始介面：標題在畫面正中央（上下兩列等高 1fr 夾住標題），選單排在標題下方 */
 #title.active{display:grid;grid-template-rows:1fr auto 1fr;justify-items:center;align-items:center;gap:0;min-height:100vh;min-height:100dvh;position:relative}
 #title::before{content:"";position:fixed;left:50%;top:50%;width:min(140vw,1700px);aspect-ratio:2/1;transform:translate(-50%,-50%);pointer-events:none;

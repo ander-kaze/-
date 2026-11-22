@@ -42,15 +42,11 @@ const SFX = (() => {
     boom()   { tone(500, 0.3, { type: 'sawtooth', vol: 0.06, to: 90 }); },
     fever()  { seq([523, 659, 784, 1047], 0.22, { vol: 0.1 }); },
     win()    { seq([523, 659, 784, 1047, 1319], 0.3, { vol: 0.12 }); },
-    heal()   { seq([880, 1175], 0.15, { vol: 0.08 }); },
-    gacha()  { seq([392, 523, 659, 784, 1047], 0.2, { vol: 0.1 }); },
-    dodge()  { tone(900, 0.15, { type: 'triangle', vol: 0.1, to: 1500 }); },
-    warn()   { tone(300, 0.3, { type: 'square', vol: 0.07, to: 200 }); },
-    lose()   { tone(400, 0.8, { type: 'triangle', vol: 0.12, to: 60 }); },
     heal()   { seq([660, 880], 0.12, { vol: 0.08 }); },
-    dodge()  { tone(900, 0.2, { type: 'triangle', vol: 0.1, to: 1500 }); },
     gacha()  { seq([523, 659, 784, 1047, 1319], 0.18, { vol: 0.1 }); },
+    dodge()  { tone(900, 0.2, { type: 'triangle', vol: 0.1, to: 1500 }); },
     warn()   { seq([300, 300], 0.2, { type: 'square', vol: 0.06 }); },
+    lose()   { tone(400, 0.8, { type: 'triangle', vol: 0.12, to: 60 }); },
   };
   const api = {
     unlock() { const a = ctx(); if (a && a.state === 'suspended') a.resume(); },

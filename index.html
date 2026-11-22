@@ -15,8 +15,16 @@
 </head>
 <body>
 
+<!-- 首次載入：預載圖片，讀完（loader.js）才進入初始介面 -->
+<section id="loading" class="screen active">
+  <h1 class="load-title">陣躍出擊</h1>
+  <div id="load-bar" class="load-bar" role="progressbar" aria-label="載入進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="load-fill"></i></div>
+  <p id="load-text" class="load-text">載入中…</p>
+  <button id="load-skip" class="back" hidden>略過</button>
+</section>
+
 <!-- 初始介面 -->
-<section id="title" class="screen active">
+<section id="title" class="screen">
   <h1 class="logo"><img src="assets/title.png" alt="陣躍出擊" draggable="false"></h1>
   <nav class="menu">
     <button data-act="dungeons">副本模式</button>
@@ -154,8 +162,12 @@
 </div>
 
 <div id="toast"></div>
+<!-- 載入順序：音效 → 副本資料 → 地圖生成 → 主程式 → 預載（loader.js 要最後，它會用到前面所有檔案） -->
 <script src="audio.js"></script>
+<script src="dungeons.js"></script>
+<script src="mapgen.js"></script>
 <script src="script.js"></script>
+<script src="loader.js"></script>
 <script>if("serviceWorker"in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("sw.js");</script>
 </body>
 </html>
