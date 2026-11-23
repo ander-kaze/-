@@ -110,7 +110,7 @@ h1.logo{grid-row:2;margin:0;width:min(98vw,1280px);line-height:0}
 /* 遊玩介面 */
 #game{width:100%;padding:6px;gap:6px;justify-content:center}
 #stage{position:relative;display:inline-block;line-height:0;max-width:100%}
-canvas{display:block;width:min(calc(100vw - 12px),calc((100vh - 64px) * 1.8947));height:auto;aspect-ratio:1440/760;margin:0 auto;border-radius:12px;touch-action:none;background:#8ecae6;box-shadow:0 0 0 2px #4a55c9,0 0 28px rgba(98,208,255,.3)}   /* 依視窗高度或寬度取較小者，填滿畫面 */
+canvas{display:block;width:min(calc(100vw - 12px),calc((100vh - 64px) * 2));height:auto;aspect-ratio:960/480;margin:0 auto;border-radius:12px;touch-action:none;background:#8ecae6;box-shadow:0 0 0 2px #4a55c9,0 0 28px rgba(98,208,255,.3)}   /* 依視窗高度或寬度取較小者，填滿畫面 */
 #result{color:#ece8f5;position:absolute;inset:0;background:rgba(15,12,25,.82);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;line-height:1.6;text-align:center}
 #result[hidden]{display:none}
 #result h2{margin:0;font-size:30px}

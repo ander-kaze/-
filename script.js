@@ -535,9 +535,26 @@ function finishBind(key) {
 const cv = $('#c'), ctx = cv.getContext('2d');
 let S = 320, speedMul = 1;   // 跑速／飛行加速
 // 畫布尺寸、物理常數、二段跳軌跡（W／H／LY／airPlan…）已移到 mapgen.js
-const slotX = sl => W / 2 + (sl - 2.5) * 210;   // 隊伍列 1~6 號位的水平中心
+// ===== 版面：全部由 W／H／PANEL_Y／LY 推算（比例 ＝ 設計稿位置 ÷ 畫布寬或高），改畫布尺寸或地面高度時會跟著走 =====
+const fx = f => Math.round(W * f), fy = f => Math.round(H * f);   // 依畫布寬／高的比例取座標
+const inR = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+const UI = (() => {
+  const m = fx(.0146), pad = fx(.0125);   // 外距、面板內距
+  const tim = { x: m, y: m, w: fx(.177), h: fy(.083) };                       // 計時
+  const hpb = { x: m, y: tim.y + tim.h + fy(.0125), w: fx(.281), h: tim.h };  // 我方 HP
+  const boss = { y: m, w: fx(.3125), h: fy(.1) }; boss.x = W - m - boss.w;    // 敵人 HP
+  const pause = { y: m, w: boss.h, h: boss.h }; pause.x = boss.x - pad - pause.w;   // 暫停鈕（敵人 HP 左邊的方鈕）
+  const chips = { step: fx(.0417), plX: m + fx(.0167), plY: hpb.y + hpb.h + fy(.046), enX: W - m - fx(.0167), enY: boss.y + boss.h + fy(.0417) };   // 狀態圖示列
+  const card = { w: fx(.3), h: fy(.46) }; card.x = (W - card.w) / 2; card.y = (PANEL_Y - card.h) / 2;   // 暫停視窗（置中於遊玩區）
+  const bw = card.w * .8, bh = fy(.1), bx = card.x + (card.w - bw) / 2;
+  const resume = { x: bx, y: card.y + card.h * .42, w: bw, h: bh }, quitB = { x: bx, y: resume.y + bh + fy(.03), w: bw, h: bh };
+  return { m, pad, tim, hpb, boss, pause, chips, card, resume, quitB };
+})();
+const SLOT_W = W / 6, slotL = sl => sl * SLOT_W, slotX = sl => slotL(sl) + SLOT_W / 2;   // 隊伍列 1~6 號位：每格寬 W/6；slotL＝格子左緣、slotX＝格子中心
 // 立繪擺放（cx = 水平中心、bottom = 底邊、w/h = 最大寬高，依比例縮放不裁切）；我方(atk)與敵人(enemy)的 bottom／w／h 保持一致才會齊高
-const PT = { enemy: { cx: W - 200, bottom: 480, w: 420, h: 380 }, atk: { cx: 200, bottom: 480, w: 420, h: 380 }, cut: { cx: W / 2, bottom: PANEL_Y - 5, w: 480, h: 420 } };
+const PB = { bottom: LY[1] + Math.round(LANE_GAP * .55), w: fx(.219), h: fy(.396) };   // 我方／敵人立繪的共同尺寸與底邊（落在第二、三層地面之間）
+const PT = { enemy: { cx: W - fx(.13), ...PB }, atk: { cx: fx(.13), ...PB }, cut: { cx: W / 2, bottom: PANEL_Y - fy(.0104), w: fx(.344), h: fy(.625) } };
+const EN = { x: PT.enemy.cx, y: PT.enemy.bottom - PT.enemy.h / 2 }, enY = f => Math.round(EN.y + PT.enemy.h * f);   // 敵人立繪中心；enY(f)＝中心往下 f 倍立繪高   // 敵人立繪中心：傷害數字、台詞、特效的出現位置
 const ENEMY_FRONT = false;   // true：敵人立繪畫在地面之上（不會被三層地面蓋住）；false：維持原本畫在地面後面
 function drawFit(im, cx, bottom, maxW, maxH) {   // 水平置中、保持比例縮放，回傳實際範圍
   const s = Math.min(maxW / im.width, maxH / im.height), w = im.width * s, h = im.height * s;
@@ -545,6 +562,7 @@ function drawFit(im, cx, bottom, maxW, maxH) {   // 水平置中、保持比例�
 }   // 三層地面高度、下方隊伍列起點、掉落判定
 // 三層地面判定、跑速、buildMap／MAP 已移到 mapgen.js
 
+let paused = false;   // 暫停中（只有 state === 'play' 時能暫停；暫停時不呼叫 update，畫面仍照畫）
 let state = 'idle', t = 0, scroll = 0, elapsed = 0, py, vy, grounded, lane, dropLane, coyote, jumpBuf, airLeft = 0, dropReq = false, keyS = false, invul;
 let pBar = { g: 0, last: 0, hold: 0 }, eBar = { g: 0, last: 0, hold: 0 };   // 扣血動畫：g = 白色殘影條目前的血量（會慢慢縮到現有血量）
 let hp, maxHp, chain, maxChain, fever, feverEnd, feverPending, feverBonus = 0, feverUsed = new Set(), feverPendMs = [], orbsGot, shake = 0, hitFlash = 0, flashT = 0, winDelay = 0, loseT = 0, loseReason = '';
@@ -578,9 +596,9 @@ function startStage() {
   leaderFx = []; activeLeaders(ids).forEach(a => a.c.leader.fx.forEach(f => leaderFx.push({ ...f, src: a.c.id })));   // 隊長技：放對號位才生效
   MAP = buildMap(pending.s.map); S = baseSpeed();
   waves = pending.s.waves; maxHp = Math.floor(team.reduce((a, m) => a + m.ch.hp, 0) * hpMult(ids));
-  $('#result').hidden = true; reset(); loadWave(0); state = 'ready'; show('game'); last = performance.now();   // 預備畫面不生成地圖：只有空的三層安全地面，按下開始後才進入地圖生成
+  $('#result').hidden = true; paused = false; reset(); loadWave(0); state = 'ready'; show('game'); last = performance.now();   // 預備畫面不生成地圖：只有空的三層安全地面，按下開始後才進入地圖生成
 }
-function quit() { state = 'idle'; openParty(); }
+function quit() { paused = false; state = 'idle'; openParty(); }
 
 /* ----- 地圖生成（gen／startFever／windDown／exitSafe／placeOnGround）已移到 mapgen.js ----- */
 
@@ -598,7 +616,7 @@ const hitEnemy = (ch, base, isSkill) => damageEnemy(calcDmg(ch, base), { ch, isS
 // 固定傷害：不受任何增傷（屬性、chain、隊長技、buff）與減傷影響；敵人有 dodge（0～1 的閃避機率）時可被閃避。回傳是否造成傷害
 function fixedHit(n, o = {}) {
   if (enemy.dead || enemy.gone || n <= 0) return false;
-  if (enemy.dodge && Math.random() < enemy.dodge) { floaters.push({ x: W - 170 + r(-30, 30), y: 290, txt: '閃避', c: '#9ad1ff', big: true, l: 1 }); return false; }
+  if (enemy.dodge && Math.random() < enemy.dodge) { floaters.push({ x: EN.x + r(-30, 30), y: EN.y, txt: '閃避', c: '#9ad1ff', big: true, l: 1 }); return false; }
   damageEnemy(n, { isSkill: true, fixed: true });
   if (lfx('fixedCd').length) team.forEach(m => { m.cd = Math.max(0, m.cd - 1); });                  // 節拍大師：每次固定傷害，全隊技能 CD -1
   if (!o.extra && lfx('fixedEcho').length && !enemy.dead) fixedHit(n, { extra: true });            // 氣運之子：追加同值傷害（追加傷害不再觸發氣運之子）
@@ -608,14 +626,14 @@ function damageEnemy(d, o = {}) {
   if (enemy.dead || enemy.gone || d <= 0) return;
   const st = enemy.st;
   if (!o.fixed && st.vuln > 0) d = Math.floor(d * st.vulnV);   // 敵人受傷增加（固定傷害不受影響）
-  if (st.floor != null && !o.poison && d <= st.floor) { floaters.push({ x: W - 170 + r(-30, 30), y: 290, txt: '護盾 0', c: '#9ad1ff', big: !!o.isSkill, l: 1 }); return; }   // 護盾：單次傷害 ≤ floor 歸零（毒蝕不受影響）
+  if (st.floor != null && !o.poison && d <= st.floor) { floaters.push({ x: EN.x + r(-30, 30), y: EN.y, txt: '護盾 0', c: '#9ad1ff', big: !!o.isSkill, l: 1 }); return; }   // 護盾：單次傷害 ≤ floor 歸零（毒蝕不受影響）
   if (st.cap != null && d > st.cap) d = st.cap;                                                                                                                  // 上限盾：超過 cap 的固定為 cap（不改變 o.fixed）
   ehp = Math.max(0, ehp - d); const m = o.ch ? elemMult(o.ch.element, enemy.element) : 1;
   for (const f of lfx('hitEnergy')) { const t = team.find(x => x.ch.id === f.src); if (t) { t.en += f.v; while (t.en >= CFG.ENERGY_MAX) { t.en -= CFG.ENERGY_MAX; t.pend++; } } }   // 布偶神的庇護(5★)：隊伍每造成一次傷害（含毒蝕每秒的傷害）使自身能量 +20
-  if (o.poison) floaters.push({ x: W - 135 + r(-20, 20), y: 320, txt: '-' + d, c: '#c77dff', l: .8 });
+  if (o.poison) floaters.push({ x: EN.x + 20 + r(-20, 20), y: enY(.16), txt: '-' + d, c: '#c77dff', l: .8 });
   else {
-    hitFlash = .15; shake = Math.max(shake, o.isSkill ? 16 : 6); boom(W - 120, 340, o.isSkill ? '#ff9f1c' : '#ffd166', o.isSkill ? 40 : 16);
-    floaters.push({ x: W - 170 + r(-30, 30), y: 290, txt: '-' + d + (m > 1 ? ' 克制!' : m < 1 ? ' 被剋' : ''), c: o.fixed ? '#ffe066' : m > 1 ? '#7dff9a' : m < 1 ? '#ff8a8a' : '#fff', big: !!o.isSkill, l: 1.1 });
+    hitFlash = .15; shake = Math.max(shake, o.isSkill ? 16 : 6); boom(EN.x + 20, enY(.21), o.isSkill ? '#ff9f1c' : '#ffd166', o.isSkill ? 40 : 16);
+    floaters.push({ x: EN.x + r(-30, 30), y: EN.y, txt: '-' + d + (m > 1 ? ' 克制!' : m < 1 ? ' 被剋' : ''), c: o.fixed ? '#ffe066' : m > 1 ? '#7dff9a' : m < 1 ? '#ff8a8a' : '#fff', big: !!o.isSkill, l: 1.1 });
   }
   if (ehp <= 0) { enemy.dead = true; enemy.deadT = 0; team.forEach(m => m.pend = 0); atkAnim = null; skillQ.forEach(m => m.queued = false); skillQ = []; SFX.boom(); }   // 敵人倒下：停止攻擊，發光後淡出
 }
@@ -734,7 +752,7 @@ function barTrail(b, cur, max, dt) {   // 扣血動畫：先停一下，再把�
 }
 function startEnemyAttack() { const pre = enemy.openQ.length > 0, atk = pre ? enemy.openQ.shift() : enemy.attacks[atkIdx++ % enemy.attacks.length]; cut = { k: 'enemy', atk, t: 0, dur: 2.6, done: false, pre: pre }; SFX.warn(); }
 function enemyFx(a) {   // 效果類攻擊：護盾／解除護盾／玩家回血／雙方受傷增加
-  const st = enemy.st, say = (txt, c) => floaters.push({ x: W - 170, y: 240, txt, c, big: true, l: 1.6 });
+  const st = enemy.st, say = (txt, c) => floaters.push({ x: EN.x, y: enY(-.26), txt, c, big: true, l: 1.6 });
   if (a.shield) {
     const s = a.shield;
     if (s.floor != null) { st.floor = s.floor; say('🛡 +' + s.floor + ' 護盾', '#ffd166'); }
@@ -828,12 +846,18 @@ function updatePlayer(dt, pc) {
 }
 
 /* ----- 輸入（上／下鍵可在設定中更換；技能固定 1~6 對應 1~6 號位） ----- */
-function press() { SFX.unlock(); if (state === 'ready') { state = 'play'; cur = genFrom = scroll + W + CFG.START_PAD; L = 2; first = true; }  else if (state === 'play') jumpBuf = .12; }
+function setPause(v) {   // 暫停／繼續：暫停時放開所有按住的往下掉操作；繼續時重設計時基準
+  if (paused === v || (v && state !== 'play')) return;
+  paused = v; if (v) { keyS = false; dropReq = false; dropPtrs.clear(); } else last = performance.now();
+}
+function press() { SFX.unlock(); if (paused) return; if (state === 'ready') { state = 'play'; cur = genFrom = scroll + W + CFG.START_PAD; L = 2; first = true; }  else if (state === 'play') jumpBuf = .12; }
 addEventListener('keydown', e => {
   SFX.unlock(); const k = e.key.toLowerCase();
   if (bindingFor) { e.preventDefault(); return finishBind(k); }
   if (screenId !== 'game') return;
   const K = save.settings.keys;
+  if (k === 'p' && k !== K.up && k !== K.down) { e.preventDefault(); if (!e.repeat) setPause(!paused); return; }   // P：暫停／繼續
+  if (paused) { if (k === 'escape') setPause(false); return; }   // 暫停中：Esc＝繼續，其餘按鍵不作用
   if (k === K.up) { e.preventDefault(); if (!e.repeat) press(); }
   else if (k === K.down) { e.preventDefault(); if (!e.repeat) dropReq = true; keyS = true; }
   else if (/^[1-6]$/.test(k) && !e.repeat) useSkill(+k - 1);
@@ -843,7 +867,9 @@ addEventListener('keyup', e => { if (e.key.toLowerCase() === save.settings.keys.
 cv.addEventListener('pointerdown', e => {
   SFX.unlock();
   const b = cv.getBoundingClientRect(), x = (e.clientX - b.left) * W / b.width, y = (e.clientY - b.top) * H / b.height;
-  if (y >= PANEL_Y) { team.forEach(m => { if (Math.hypot(x - slotX(m.slot), y - (PANEL_Y + 66)) < 48) useSkill(m.slot); }); return; }   // 點角色圖示＝發動技能
+  if (paused) { if (inR(UI.resume, x, y)) setPause(false); else if (inR(UI.quitB, x, y)) quit(); return; }   // 暫停視窗：繼續／離開關卡
+  if (state === 'play' && inR(UI.pause, x, y)) { setPause(true); return; }   // 暫停鈕
+  if (y >= PANEL_Y) { team.forEach(m => { if (x >= slotL(m.slot) && x < slotL(m.slot) + SLOT_W) useSkill(m.slot); }); return; }   // 點隊伍列的角色格＝發動技能
   // 手機操作模式（設定裡可選）：ud＝上半跳、下半往下掉；lr＝右半跳、左半往下掉。還沒開始（準備畫面）時，點哪裡都是開始
   const drop = state === 'play' && (save.settings.touch === 'lr' ? x < W / 2 : y >= (LY[0] + LY[1]) / 2);
   if (!drop) press(); else { dropReq = true; keyS = true; dropPtrs.add(e.pointerId); }
@@ -941,19 +967,19 @@ function chip(x, y, ic, sec, lab) {   // 狀態圖示
   txt(ic, x, y + 6, 16, '#fff', 400, 'center'); if (sec != null) txt(Math.ceil(sec) + 's', x, y + 30, 11, '#fff', 600, 'center'); if (lab != null) txt(lab, x, y + 30, 11, '#fff', 600, 'center');
 }
 function bubble(s) {   // 敵人頭上的對話框
-  ctx.font = '700 20px "Noto Sans TC",sans-serif'; const w = Math.min(440, ctx.measureText(s).width + 40), ex = PT.enemy.cx, x = Math.min(W - 14 - w, ex - w / 2 + 40), y = 120;
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(x, y, w, 50, 12); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(ex - 10, y + 50); ctx.lineTo(ex + 2, y + 68); ctx.lineTo(ex + 16, y + 50); ctx.fill(); txt(s, x + w / 2, y + 32, 20, '#222', 700, 'center');
+  const fs = fy(.035), bh = fy(.0875); ctx.font = `700 ${fs}px "Noto Sans TC",sans-serif`; const w = Math.min(fx(.417), ctx.measureText(s).width + fx(.033)), ex = PT.enemy.cx, x = Math.min(W - UI.m - w, ex - w / 2 + fx(.042)), y = LY[0] - fy(.154);
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(x, y, w, bh, bh * .24); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(ex - bh * .19, y + bh); ctx.lineTo(ex + bh * .05, y + bh * 1.38); ctx.lineTo(ex + bh * .29, y + bh); ctx.fill(); txt(s, x + w / 2, y + bh * .64, fs, '#222', 700, 'center');
 }
 function drawEnemy() {   // 右側敵人：立繪 > 圖示 > 內建城堡 > 預設色塊；倒下時發光後淡出
   const e = enemy; if (!e || e.gone) return;
   const a = e.dead ? Math.max(0, 1 - Math.max(0, e.deadT - .5) / .9) : Math.min(1, e.appear);
   const lunge = cut && cut.k === 'enemy' && cut.t > 1.5 && cut.t < 2.1 ? -Math.sin((cut.t - 1.5) / .6 * Math.PI) * 80 : 0;
   ctx.save(); ctx.translate(lunge, 0); ctx.globalAlpha = a;
-  const im = getImg(e.portrait || e.image); let rc = { x: W - 237, y: 190, w: 204, h: 340 }, bd = { x: W - 210, y: 265 };
+  const im = getImg(e.portrait || e.image); let rc = { x: EN.x - PT.enemy.w * .357, y: PT.enemy.bottom - PT.enemy.h * .92, w: PT.enemy.w * .714, h: PT.enemy.h * .92 }, bd = { x: rc.x + UI.m, y: rc.y + fy(.0375) };
   if (im) { rc = drawFit(im, PT.enemy.cx, PT.enemy.bottom, PT.enemy.w, PT.enemy.h); bd = { x: rc.x + 14, y: rc.y + 18 }; }
-  else if (e.art === 'castle') { const s = .85; ctx.save(); ctx.translate(W - 110 - 850 * s, 490 - 430 * s); ctx.scale(s, s); drawCastle(); ctx.restore(); }
-  else { rc = { x: W - 225, y: 250, w: 180, h: 250 }; ctx.fillStyle = e.element ? ELEMENTS[e.element].color : '#555'; ctx.beginPath(); ctx.roundRect(rc.x, rc.y, rc.w, rc.h, 16); ctx.fill(); txt(e.name, W - 135, 380, 20, '#fff', 700, 'center'); }
+  else if (e.art === 'castle') { const s = PT.enemy.h / 380; ctx.save(); ctx.translate(EN.x - 850 * s, PT.enemy.bottom + fy(.0104) - 430 * s); ctx.scale(s, s); drawCastle(); ctx.restore(); }
+  else { rc = { x: EN.x - PT.enemy.w * .286, y: PT.enemy.bottom - PT.enemy.h * .79, w: PT.enemy.w * .571, h: PT.enemy.h * .79 }; ctx.fillStyle = e.element ? ELEMENTS[e.element].color : '#555'; ctx.beginPath(); ctx.roundRect(rc.x, rc.y, rc.w, rc.h, 16); ctx.fill(); txt(e.name, EN.x, rc.y + rc.h / 2 + fy(.0125), fy(.033), '#fff', 700, 'center'); }
   if (e.dead) { const gx = rc.x + rc.w / 2, gy = rc.y + rc.h / 2, gr = Math.max(rc.w, rc.h) * .7, g = ctx.createRadialGradient(gx, gy, 10, gx, gy, gr); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.globalAlpha = Math.min(1, e.deadT / .5) * a; ctx.fillStyle = g; ctx.fillRect(gx - gr, gy - gr, gr * 2, gr * 2); }
   ctx.restore();
   if (e.element && !e.dead) badge(bd.x, bd.y, e.element, 16);
@@ -972,47 +998,72 @@ function drawAtkStar() {   // 攻擊特效（飛向敵人的星星）畫在最�
   if (!atkAnim || (cut && cut.pre)) return; const ch = atkAnim.m.ch, tt = atkAnim.t;
   if (tt >= .15 && tt <= .45) { const p = (tt - .15) / .3; star(PT.atk.cx + PT.atk.w * .4 + (PT.enemy.cx - PT.atk.cx - PT.atk.w * .4) * p, PT.atk.bottom - PT.atk.h * .5 + 20 * p, 26, ELEMENTS[ch.element].orb); }
 }
-function drawTeam() {   // 下方隊伍列：頭像、屬性徽章、技能 CD、能量條（依號位排列）
-  ctx.fillStyle = '#1b1626'; ctx.fillRect(0, PANEL_Y, W, H - PANEL_Y); ctx.fillStyle = '#3d3550'; ctx.fillRect(0, PANEL_Y, W, 3);
+function drawTeam() {   // 下方隊伍列（PANEL_Y~H，每格寬 W/6）：號位、頭像（含屬性徽章）、名稱、技能 CD（就緒＝⚡）、底部能量條；尺寸都是隊伍列高度 bh 的比例
+  const bh = H - PANEL_Y, pad = SLOT_W * .0625;
+  ctx.fillStyle = '#1b1626'; ctx.fillRect(0, PANEL_Y, W, bh); ctx.fillStyle = '#3d3550'; ctx.fillRect(0, PANEL_Y, W, 2);
+  ctx.fillStyle = 'rgba(255,255,255,.08)'; for (let i = 1; i < 6; i++) ctx.fillRect(i * SLOT_W - 1, PANEL_Y + bh * .13, 1, bh * .74);   // 格線
   team.forEach(m => {
-    const ch = m.ch, cx = slotX(m.slot), cy = PANEL_Y + 66, ready = m.cd <= 0;
-    if (ready) { ctx.fillStyle = `rgba(255,209,102,${.25 + .2 * Math.sin(t * 8)})`; ctx.beginPath(); ctx.arc(cx, cy, 46, 0, 7); ctx.fill(); }
-    ctx.fillStyle = ELEMENTS[ch.element].color; ctx.beginPath(); ctx.arc(cx, cy, 36, 0, 7); ctx.fill();
+    const ch = m.ch, x0 = slotL(m.slot), R = bh * .283, cx = x0 + SLOT_W * .175, cy = PANEL_Y + bh * .45, ready = m.cd <= 0;
+    if (ready) { ctx.fillStyle = `rgba(255,209,102,${.10 + .08 * Math.sin(t * 8)})`; ctx.fillRect(x0 + 2, PANEL_Y + bh * .05, SLOT_W - 4, bh * .95); }
+    txt(String(m.slot + 1), x0 + SLOT_W * .05, PANEL_Y + bh * .23, bh * .167, '#8f87a3', 600);
+    ctx.fillStyle = ELEMENTS[ch.element].color; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fill();
     const im = getImg(ch.icon || ch.portrait);
-    if (im) { ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, 36, 0, 7); ctx.clip(); const k = Math.max(72 / im.width, 72 / im.height), iw = im.width * k, ih = im.height * k; ctx.drawImage(im, cx - iw / 2, cy - ih / 2, iw, ih); ctx.restore(); } else txt(ch.short || ch.name[0], cx, cy + 9, 24, '#fff', 700, 'center');
-    ctx.strokeStyle = ready ? '#ffd166' : 'rgba(255,255,255,.4)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, 36, 0, 7); ctx.stroke();
-    badge(cx - 32, cy - 30, ch.element, 12); txt(ready ? '⚡' : String(m.cd), cx - 32, cy - 48, 15, ready ? '#ffd166' : '#fff', 700, 'center');
-    ctx.fillStyle = '#2b2140'; ctx.fillRect(cx - 38, cy + 42, 76, 7); ctx.fillStyle = ELEMENTS[ch.element].orb; ctx.fillRect(cx - 38, cy + 42, 76 * m.en / CFG.ENERGY_MAX, 7);
-    txt(`[${m.slot + 1}] ${ch.short || ch.name}`, cx, cy + 68, 12, '#cfc8dd', 400, 'center');
+    if (im) { ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.clip(); const k = Math.max(R * 2 / im.width, R * 2 / im.height), iw = im.width * k, ih = im.height * k; ctx.drawImage(im, cx - iw / 2, cy - ih / 2, iw, ih); ctx.restore(); } else txt(ch.short || ch.name[0], cx, cy + bh * .083, bh * .217, '#fff', 700, 'center');
+    ctx.strokeStyle = ready ? '#ffd166' : 'rgba(255,255,255,.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
+    badge(cx - R * .82, cy + R * .76, ch.element, bh * .117);
+    const nm = ch.short || ch.name; txt(nm.length > 5 ? nm.slice(0, 5) : nm, x0 + SLOT_W * .3375, cy + bh * .067, bh * .217, '#fff', 600);
+    txt(ready ? '⚡' : String(m.cd), x0 + SLOT_W - pad, cy + bh * .133, bh * .367, ready ? '#ffd166' : '#fff', 700, 'right');
+    ctx.fillStyle = '#2b2140'; ctx.fillRect(x0 + pad, H - bh * .117, SLOT_W - pad * 2, bh * .067); ctx.fillStyle = ELEMENTS[ch.element].orb; ctx.fillRect(x0 + pad, H - bh * .117, (SLOT_W - pad * 2) * m.en / CFG.ENERGY_MAX, bh * .067);
   });
 }
-function hud() {
-  panel(14, 14, 170, 40); txt('⏱ ' + fmt(elapsed), 26, 42, 22, '#fff', 700);
-  panel(14, 60, 270, 40); txt(`HP ${hp}/${maxHp}`, 26, 76, 13, '#fff', 600);
-  ctx.fillStyle = '#3d3550'; ctx.fillRect(26, 83, 246, 10); ctx.fillStyle = '#fff'; ctx.fillRect(26, 83, 246 * Math.max(pBar.g, hp) / maxHp, 10); ctx.fillStyle = hp / maxHp > .3 ? '#4ade80' : '#ef476f'; ctx.fillRect(26, 83, 246 * hp / maxHp, 10);
-  let i = 0, cx = () => 30 + i++ * 40;   // 玩家狀態圖示
-  if (status.dodge) chip(cx(), 122, '🛡'); if (status.block > 0) chip(cx(), 122, '🧱', null, '×' + status.block); if (status.shield) chip(cx(), 122, '🔰', status.shield.t); if (status.convert) chip(cx(), 122, '🌈', status.convert.t); for (const el in status.dmgUp) chip(cx(), 122, '⚔' + el, status.dmgUp[el].t); if (status.magnet) chip(cx(), 122, '🧲', status.magnet.t); if (fly > 0) chip(cx(), 122, '🪽', fly); for (const x of status.taken) chip(cx(), 122, '💔', x.t);
-  txt(String(chain), W / 2, 50, 42, '#ffd166', 700, 'center'); txt('chain', W / 2, 70, 15, '#fff', 600, 'center');
-  ctx.fillStyle = '#2b2140'; ctx.fillRect(W / 2 - 50, 78, 100, 5); ctx.fillStyle = '#ffd166'; ctx.fillRect(W / 2 - 50, 78, 100 * (chain % CFG.FEVER_AT) / CFG.FEVER_AT, 5);
-  if (enemy) {
-    panel(W - 314, 14, 300, 48); txt(`${enemy.name}　${ehp}/${enemy.hp}`, W - 302, 33, 14, '#fff', 600);
-    ctx.fillStyle = '#3d3550'; ctx.fillRect(W - 302, 40, 276, 12); ctx.fillStyle = '#fff'; ctx.fillRect(W - 302, 40, 276 * Math.max(eBar.g, ehp) / enemy.hp, 12); ctx.fillStyle = '#ef476f'; ctx.fillRect(W - 302, 40, 276 * ehp / enemy.hp, 12);
-    let j = 0; const ex = () => W - 30 - j++ * 40;   // 敵人狀態圖示
-    const es = enemy.st; if (es.floor != null) chip(ex(), 82, '🛡', null, '≤' + es.floor); if (es.cap != null) chip(ex(), 82, '🔰', null, '上限' + es.cap / 1000 + 'k'); if (es.reduce) chip(ex(), 82, '🧱', null, '-' + Math.round(es.reduce * 100) + '%'); if (es.vuln > 0) chip(ex(), 82, '💢', es.vuln);
-    if (enemy.st.space > 0) chip(ex(), 82, '🌀', enemy.st.space); if (enemy.st.poisons.length) { const ps = enemy.st.poisons, mx = Math.max(...ps.map(p => p.t)); ps.length > 1 ? chip(ex(), 82, '☠', null, Math.ceil(mx) + 's×' + ps.length) : chip(ex(), 82, '☠', mx); }
+function hud() {   // 版面位置全部來自 UI
+  const { tim, hpb, boss, pause: pb, chips, pad } = UI, mid = W / 2;
+  panel(tim.x, tim.y, tim.w, tim.h); txt('⏱ ' + fmt(elapsed), tim.x + pad, tim.y + tim.h * .7, tim.h * .55, '#fff', 700);
+  panel(hpb.x, hpb.y, hpb.w, hpb.h); txt(`HP ${hp}/${maxHp}`, hpb.x + pad, hpb.y + hpb.h * .4, hpb.h * .325, '#fff', 600);
+  const hx = hpb.x + pad, hy = hpb.y + hpb.h * .575, hw = hpb.w - pad * 2, hh = hpb.h * .25;
+  ctx.fillStyle = '#3d3550'; ctx.fillRect(hx, hy, hw, hh); ctx.fillStyle = '#fff'; ctx.fillRect(hx, hy, hw * Math.max(pBar.g, hp) / maxHp, hh); ctx.fillStyle = hp / maxHp > .3 ? '#4ade80' : '#ef476f'; ctx.fillRect(hx, hy, hw * hp / maxHp, hh);
+  let i = 0, cx = () => chips.plX + i++ * chips.step, py0 = chips.plY;   // 玩家狀態圖示
+  if (status.dodge) chip(cx(), py0, '🛡'); if (status.block > 0) chip(cx(), py0, '🧱', null, '×' + status.block); if (status.shield) chip(cx(), py0, '🔰', status.shield.t); if (status.convert) chip(cx(), py0, '🌈', status.convert.t); for (const el in status.dmgUp) chip(cx(), py0, '⚔' + el, status.dmgUp[el].t); if (status.magnet) chip(cx(), py0, '🧲', status.magnet.t); if (fly > 0) chip(cx(), py0, '🪽', fly); for (const x of status.taken) chip(cx(), py0, '💔', x.t);
+  txt(String(chain), mid, fy(.104), fy(.0875), '#ffd166', 700, 'center'); txt('chain', mid, fy(.146), fy(.031), '#fff', 600, 'center');
+  const cw = fx(.104), cby = fy(.1625), cbh = fy(.0104);
+  ctx.fillStyle = '#2b2140'; ctx.fillRect(mid - cw / 2, cby, cw, cbh); ctx.fillStyle = '#ffd166'; ctx.fillRect(mid - cw / 2, cby, cw * (chain % CFG.FEVER_AT) / CFG.FEVER_AT, cbh);
+  if (state === 'play' || paused) {   // 暫停鈕：暫停中顯示「繼續」三角形
+    panel(pb.x, pb.y, pb.w, pb.h); ctx.fillStyle = '#fff';
+    if (paused) { ctx.beginPath(); ctx.moveTo(pb.x + pb.w * .36, pb.y + pb.h * .28); ctx.lineTo(pb.x + pb.w * .72, pb.y + pb.h * .5); ctx.lineTo(pb.x + pb.w * .36, pb.y + pb.h * .72); ctx.fill(); }
+    else { const bw = pb.w * .13, bh2 = pb.h * .42; ctx.fillRect(pb.x + pb.w * .5 - bw * 1.4, pb.y + (pb.h - bh2) / 2, bw, bh2); ctx.fillRect(pb.x + pb.w * .5 + bw * .4, pb.y + (pb.h - bh2) / 2, bw, bh2); }
   }
-  if (fever) { panel(W / 2 - 110, 92, 220, 36); txt('🔥 FEVER 🔥', W / 2, 118, 20, '#ffd166', 700, 'center'); }
+  if (enemy) {
+    const bx = boss.x + pad, bw = boss.w - pad * 2, by = boss.y + boss.h * .54, bh3 = boss.h * .25;
+    panel(boss.x, boss.y, boss.w, boss.h); txt(`${enemy.name}　${ehp}/${enemy.hp}`, bx, boss.y + boss.h * .396, boss.h * .29, '#fff', 600);
+    ctx.fillStyle = '#3d3550'; ctx.fillRect(bx, by, bw, bh3); ctx.fillStyle = '#fff'; ctx.fillRect(bx, by, bw * Math.max(eBar.g, ehp) / enemy.hp, bh3); ctx.fillStyle = '#ef476f'; ctx.fillRect(bx, by, bw * ehp / enemy.hp, bh3);
+    let j = 0; const ex = () => chips.enX - j++ * chips.step, ey = chips.enY;   // 敵人狀態圖示
+    const es = enemy.st; if (es.floor != null) chip(ex(), ey, '🛡', null, '≤' + es.floor); if (es.cap != null) chip(ex(), ey, '🔰', null, '上限' + es.cap / 1000 + 'k'); if (es.reduce) chip(ex(), ey, '🧱', null, '-' + Math.round(es.reduce * 100) + '%'); if (es.vuln > 0) chip(ex(), ey, '💢', es.vuln);
+    if (enemy.st.space > 0) chip(ex(), ey, '🌀', enemy.st.space); if (enemy.st.poisons.length) { const ps = enemy.st.poisons, mx = Math.max(...ps.map(p => p.t)); ps.length > 1 ? chip(ex(), ey, '☠', null, Math.ceil(mx) + 's×' + ps.length) : chip(ex(), ey, '☠', mx); }
+  }
+  if (fever) { const fw = fx(.229), fh = fy(.075), fyy = fy(.192); panel(mid - fw / 2, fyy, fw, fh); txt('🔥 FEVER 🔥', mid, fyy + fh * .72, fh * .556, '#ffd166', 700, 'center'); }
+}
+function drawPause() {   // 暫停視窗：繼續／離開關卡
+  if (!paused) return;
+  const { card, resume, quitB } = UI;
+  ctx.fillStyle = 'rgba(10,8,20,.7)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#241d36'; ctx.beginPath(); ctx.roundRect(card.x, card.y, card.w, card.h, fx(.0125)); ctx.fill(); ctx.strokeStyle = '#4a55c9'; ctx.lineWidth = 2; ctx.stroke();
+  txt('暫停', W / 2, card.y + card.h * .27, fy(.075), '#fff', 700, 'center');
+  for (const [b, lb, main] of [[resume, '繼續', true], [quitB, '離開關卡', false]]) {
+    ctx.fillStyle = main ? '#ffd166' : '#3d3550'; ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, b.h * .25); ctx.fill();
+    txt(lb, b.x + b.w / 2, b.y + b.h * .66, b.h * .42, main ? '#1b1626' : '#fff', 700, 'center');
+  }
+  txt('按 P 或 Esc 繼續', W / 2, card.y + card.h * .94, fy(.029), '#cfc8dd', 400, 'center');
 }
 function drawCut() {   // 技能過場（立繪跳出＋技能名稱）／敵人攻擊時稍微壓暗
   if (!cut) return;
   if (cut.k === 'enemy') { ctx.fillStyle = 'rgba(10,8,20,.25)'; ctx.fillRect(0, 0, W, PANEL_Y); return; }
   const ch = cut.m.ch, p = Math.min(1, cut.t / .25), ox = -(1 - p) * W, fade = Math.max(0, Math.min(1, (cut.dur - cut.t) / .2));
   ctx.save(); ctx.globalAlpha = fade; ctx.fillStyle = 'rgba(10,8,20,.75)'; ctx.fillRect(0, 0, W, PANEL_Y);
-  ctx.fillStyle = ELEMENTS[ch.element].color; ctx.fillRect(ox, 190, W * .72, 62); txt(ch.skill.name, ox + 36, 233, 36, '#fff', 700);
+  ctx.fillStyle = ELEMENTS[ch.element].color; ctx.fillRect(ox, PANEL_Y * .25, W * .72, fy(.104)); txt(ch.skill.name, ox + fx(.029), PANEL_Y * .333, fy(.0625), '#fff', 700);
   const im = getImg(ch.portrait);
   const P = PT.cut;
   if (im) drawFit(im, P.cx + ox, P.bottom, P.w, P.h);
-  else { ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.strokeStyle = ELEMENTS[ch.element].color; ctx.lineWidth = 4; ctx.beginPath(); ctx.roundRect(P.cx - 180 + ox, 270, 360, 260, 18); ctx.fill(); ctx.stroke(); txt(ch.name, P.cx + ox, 410, 28, '#fff', 700, 'center'); }
+  else { ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.strokeStyle = ELEMENTS[ch.element].color; ctx.lineWidth = 4; ctx.beginPath(); ctx.roundRect(P.cx - P.w * .364 + ox, PANEL_Y * .405, P.w * .727, PANEL_Y * .452, 14); ctx.fill(); ctx.stroke(); txt(ch.name, P.cx + ox, PANEL_Y * .655, fy(.046), '#fff', 700, 'center'); }
   ctx.restore();
 }
 function draw() {
@@ -1021,43 +1072,46 @@ function draw() {
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   if (shake > 0) ctx.translate(r(-shake, shake) / 3, r(-shake, shake) / 3);
   ctx.fillStyle = 'rgba(255,255,255,.75)';
-  for (let i = 0; i < 6; i++) { const x = ((i * 260 - scroll * .15) % 1560 + 1560) % 1560 - 150; ctx.beginPath(); ctx.ellipse(x, 170 + (i % 3) * 30, 48, 16, 0, 0, 7); ctx.ellipse(x + 30, 162 + (i % 3) * 30, 34, 14, 0, 0, 7); ctx.fill(); }
+  for (let i = 0; i < 6; i++) { const x = ((i * 260 - scroll * .15) % 1560 + 1560) % 1560 - 150; ctx.beginPath(); ctx.ellipse(x, LY[0] - fy(.1667) + (i % 3) * 30, 48, 16, 0, 0, 7); ctx.ellipse(x + 30, LY[0] - fy(.1833) + (i % 3) * 30, 34, 14, 0, 0, 7); ctx.fill(); }
   ctx.fillStyle = MAP.mountain;
-  for (let i = 0; i < 6; i++) { const x = ((i * 300 - scroll * .35) % 1800 + 1800) % 1800 - 200; ctx.beginPath(); ctx.moveTo(x, LY[2] + 22); ctx.lineTo(x + 120, LY[2] - 100); ctx.lineTo(x + 240, LY[2] + 22); ctx.fill(); }
+  for (let i = 0; i < 6; i++) { const x = ((i * 300 - scroll * .35) % 1800 + 1800) % 1800 - 200; ctx.beginPath(); ctx.moveTo(x, LY[2] + GROUND_H); ctx.lineTo(x + 120, LY[2] - 100); ctx.lineTo(x + 240, LY[2] + GROUND_H); ctx.fill(); }
   const front = ENEMY_FRONT && enemy && (enemy.portrait || enemy.image);
   if (!front) { drawEnemy(); drawAtkAnim(); }   // 敵人與我方立繪都在地面後面
-  const vg = ctx.createLinearGradient(0, LY[2] + 22, 0, PANEL_Y); vg.addColorStop(0, '#2b2140'); vg.addColorStop(1, '#0b0814');
-  ctx.fillStyle = vg; ctx.fillRect(0, LY[2] + 22, W, PANEL_Y - LY[2] - 22);
+  const vg = ctx.createLinearGradient(0, LY[2] + GROUND_H, 0, PANEL_Y); vg.addColorStop(0, '#2b2140'); vg.addColorStop(1, '#0b0814');
+  ctx.fillStyle = vg; ctx.fillRect(0, LY[2] + GROUND_H, W, PANEL_Y - LY[2] - GROUND_H);
   for (let l = 0; l < 3; l++) {   // 三層地面（20px 方塊，缺口留空）
     const i0 = Math.floor(scroll / 20) - 1;
     for (let i = i0; i < i0 + Math.ceil(W / 20) + 3; i++) {
       const x = i * 20, sx = x - scroll; if (!solid(l, x + 10)) continue;
-      ctx.fillStyle = MAP.ground[0]; ctx.fillRect(sx, LY[l], 20, 22); ctx.fillStyle = MAP.ground[1]; ctx.fillRect(sx, LY[l], 20, 6); ctx.fillStyle = '#6b523a'; ctx.fillRect(sx, LY[l] + 14, 20, 8);
+      ctx.fillStyle = MAP.ground[0]; ctx.fillRect(sx, LY[l], 20, GROUND_H); ctx.fillStyle = MAP.ground[1]; ctx.fillRect(sx, LY[l], 20, 6); ctx.fillStyle = '#6b523a'; ctx.fillRect(sx, LY[l] + GROUND_H - 8, 20, 8);
     }
   }
   if (front) drawEnemy();
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); drawTeam(); ctx.restore();   // 隊伍列先畫（不跟著震動）：最下層的虛空只剩一小條，潛水時玩家與能量球會畫在隊伍列上方
   drawIces(); drawEnemies(); drawSpecial(); drawOrbs(); drawArrows(); drawAtkStar(); drawPlayer();   // 攻擊立繪在地圖之上、跑酷角色之下
   for (const p of particles) { ctx.globalAlpha = Math.max(0, p.l * 2); ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, 5, 5); }
   ctx.globalAlpha = 1;
   for (const f of floaters) { ctx.globalAlpha = Math.min(1, f.l * 2); txt(f.txt, f.x, f.y, f.big ? 38 : 22, f.c, 700, 'center'); }
   ctx.globalAlpha = 1; ctx.setTransform(1, 0, 0, 1, 0, 0);
-  drawTeam(); hud(); drawCut();
-  if (banner) { const a = Math.max(0, Math.min(1, banner.t / .3, (2.2 - banner.t) / .4)); ctx.globalAlpha = a; ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, 305, W, 80); txt(banner.txt, W / 2, 362, 54, '#fff', 700, 'center'); ctx.globalAlpha = 1; }
+  hud(); drawCut();
+  if (banner) { const a = Math.max(0, Math.min(1, banner.t / .3, (2.2 - banner.t) / .4)); ctx.globalAlpha = a; ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, PANEL_Y * .405, W, fy(.133)); txt(banner.txt, W / 2, PANEL_Y * .514, fy(.092), '#fff', 700, 'center'); ctx.globalAlpha = 1; }
   if (flashT > 0) { ctx.fillStyle = `rgba(255,255,255,${flashT * 1.6})`; ctx.fillRect(0, 0, W, H); }
+  drawPause();
   if (state === 'ready') {
     ctx.fillStyle = 'rgba(15,12,25,.65)'; ctx.fillRect(0, 0, W, PANEL_Y);
-    txt('準備好了嗎？', W / 2, 280, 38, '#fff', 700, 'center'); txt(`按 ${keyLabel(save.settings.keys.up)} 或點擊畫面開始`, W / 2, 326, 22, '#ffd166', 700, 'center');
-    txt('吃同屬性能量球填滿角色能量條　技能：按 1~6 或點下方角色', W / 2, 366, 17, '#cfc8dd', 400, 'center');
-    txt('手機操作：' + TOUCH_HINT[save.settings.touch] + '（可在「設定」更改）', W / 2, 400, 17, '#cfc8dd', 400, 'center');
+    txt('準備好了嗎？', W / 2, PANEL_Y * .357, fy(.071), '#fff', 700, 'center'); txt(`按 ${keyLabel(save.settings.keys.up)} 或點擊畫面開始`, W / 2, PANEL_Y * .457, fy(.042), '#ffd166', 700, 'center');
+    txt('吃同屬性能量球填滿角色能量條　技能：按 1~6 或點下方角色', W / 2, PANEL_Y * .543, fy(.031), '#cfc8dd', 400, 'center');
+    txt('手機操作：' + TOUCH_HINT[save.settings.touch] + '（可在「設定」更改）', W / 2, PANEL_Y * .61, fy(.031), '#cfc8dd', 400, 'center');
   }
 }
 
 /* ----- 主迴圈 ----- */
 requestAnimationFrame(function loop(n) {
   const dt = Math.min(.033, (n - last) / 1000); last = n;
-  if (screenId === 'game') { update(dt); draw(); }
+  if (screenId === 'game') { if (!paused) update(dt); draw(); }
   requestAnimationFrame(loop);
 });
+document.addEventListener('visibilitychange', () => { if (document.hidden && screenId === 'game') setPause(true); });   // 切到別的分頁／視窗自動暫停
 SFX.setVolume(save.settings.volume);
 // 開場畫面（#loading）由 loader.js 預載圖片後切到 title
 

@@ -11,9 +11,14 @@ let soloLane = -1;   // 單層地圖時只保留的那一層（-1 = 三層都在
 let laneOn = [false, false, true], windX = 0, genFrom = -1, gaps, orbs, moles, fires, arrows, ices, cur, L, first, segIdx = 0, genPause = false;
 
 /* ----- 畫布尺寸與物理常數、二段跳軌跡 ----- */
-const W = 1440, H = 760, PX = 200,   // 畫布邏輯尺寸（寬螢幕版）：上方 0~PANEL_Y 為遊玩區，下方為隊伍列
-   GR = 2400, V0 = 900, PH = 56, T = 2 * V0 / GR;
-const LY = [280, 380, 480], PANEL_Y = 600, LOSE_Y = LY[2] + 90;   // 三層地面的高度、隊伍列起點
+const W = 960, H = 480,                    // 畫布邏輯尺寸（2:1）；CSS 只負責等比放大，邏輯座標固定
+   PX = Math.round(W * .177),              // 玩家的水平位置（畫布寬的 17.7%）
+   TEAM_H = Math.round(H * .125),          // 下方隊伍列高度（畫布高的 12.5%）
+   GR = 2400, V0 = 900, PH = 56, T = 2 * V0 / GR;   // 物理（世界單位，不跟畫布比例走）：重力、起跳速度、角色高度
+// 版面由下往上推算：隊伍列在最底；最下層地面貼在隊伍列上方（只留一小條虛空），其上每層相隔 LANE_GAP（跳躍物理要用，是世界單位）
+const PANEL_Y = H - TEAM_H, GROUND_H = 22, VOID_GAP = Math.round(H * .0167), LANE_GAP = 100;
+const LY = [0, 1, 2].map(l => PANEL_Y - VOID_GAP - GROUND_H - (2 - l) * LANE_GAP);   // 三層地面的高度（畫布 480 高時＝190／290／390）
+const LOSE_Y = LY[2] + 90;   // 掉到這裡算掉入虛空（潛水時玩家會畫在隊伍列上方，見 draw()）
 
 const AIR_CEIL = LY[0] - 10;   // 二段跳的頂點上限＝最上層地面（從最下層起跳、再二段跳，頂點剛好碰到第三層平面；多留 10px 抵銷逐格積分的誤差，確保一定踩得到）
 // 二段跳向上的速度：基本力道，但不會高過「剛好頂到上限」所需的速度。在虛空裡（低於最下層）按下就是完整力道，可以補救
