@@ -496,6 +496,43 @@ function openPool(s) {   // 獎池資訊：各星級機率與獎池內所有角�
   wrap.append(el('small', null, '灰色 = 尚未持有；副本掉落角色不在獎池內。'));
   openDlg(s.name + '　獎池資訊', wrap);
 }
+/* --- 抽到四星（含以上）的抽獎動畫：蓄力 → 爆閃 → 立繪登場；多隻四星依序登場，點一下換下一隻，「略過」直接看結果；結束後才呼叫 done（顯示抽獎結果） --- */
+function playGachaFx(list, done) {   // list：[{ c: 角色, isNew }…]
+  const fx = $('#gacha-fx'), reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  let i = 0, phase = '', tm = [], canNext = false, ended = false;
+  const later = (f, ms) => tm.push(setTimeout(f, ms)), clear = () => { tm.forEach(clearTimeout); tm = []; };
+  const setPhase = p => { phase = p; fx.dataset.phase = ''; void fx.offsetWidth; fx.dataset.phase = p; };   // 先清掉再設，動畫才會重新播
+  const sparks = (n, col) => {   // 迸出光點
+    const box = $('#gfx-sparks');
+    for (let k = 0; k < n; k++) {
+      const s = el('i'), a = Math.random() * 6.283, d = 70 + Math.random() * 280, c = Math.random() < .5 ? '#fff3c4' : (Math.random() < .5 ? '#ffd166' : col);
+      s.style.cssText = `--dx:${Math.round(Math.cos(a) * d)}px;--dy:${Math.round(Math.sin(a) * d)}px;--s:${(3 + Math.random() * 7).toFixed(1)}px;--t:${(.7 + Math.random() * .8).toFixed(2)}s;background:${c};color:${c}`;
+      box.append(s); setTimeout(() => s.remove(), 1700);
+    }
+  };
+  const charge = () => {
+    clear(); canNext = false; fx.style.setProperty('--c', ELEMENTS[list[i].c.element].color);
+    $('#gfx-hint').className = ''; $('#gfx-hint').textContent = ''; fx.hidden = false; setPhase('charge'); SFX.gacha();
+    later(burst, reduce ? 500 : 1500);
+  };
+  const burst = () => {
+    if (phase !== 'charge') return; clear(); setPhase('burst'); sparks(24, ELEMENTS[list[i].c.element].color); SFX.boom();
+    later(reveal, reduce ? 0 : 380);
+  };
+  const reveal = () => {
+    clear(); const { c, isNew } = list[i], col = ELEMENTS[c.element].color;
+    $('#gfx-art').replaceChildren(portraitEl(c));
+    $('#gfx-stars').innerHTML = Array.from({ length: c.star }, (_, k) => `<span style="animation-delay:${(.3 + k * .16).toFixed(2)}s">★</span>`).join('');
+    $('#gfx-name').textContent = c.name;
+    $('#gfx-sub').innerHTML = `<span class="gfx-el" style="background:${col}">${c.element}</span>` + (isNew ? '<span class="gfx-new">NEW</span>' : '');
+    setPhase('reveal'); sparks(44, col); SFX.win();
+    later(() => { canNext = true; const h = $('#gfx-hint'); h.textContent = list.length > 1 ? `點一下繼續（${i + 1}/${list.length}）` : '點一下繼續'; h.className = 'on'; }, reduce ? 200 : 1000);
+  };
+  const finish = () => { if (ended) return; ended = true; clear(); fx.hidden = true; fx.dataset.phase = ''; fx.onclick = null; $('#gfx-skip').onclick = null; done(); };
+  fx.onclick = () => { if (phase === 'charge') burst(); else if (phase === 'reveal' && canNext) { if (++i < list.length) charge(); else finish(); } };
+  $('#gfx-skip').onclick = e => { e.stopPropagation(); finish(); };
+  charge();
+}
 function useTicket(s) {
   if (!(save.tickets[s.id] > 0)) return toast('沒有抽獎券了');
   save.tickets[s.id]--;
@@ -504,9 +541,13 @@ function useTicket(s) {
     let x = r(0, tot), star = ks[0]; for (const k of ks) { x -= s.rates[k]; if (x < 0) { star = k; break; } }
     const c = pick(CHARACTERS.filter(c => c.star === star && !c.dropStage)); res.push({ c, isNew: !(save.owned[c.id] > 0) }); save.owned[c.id] = (save.owned[c.id] || 0) + 1;   // 副本掉落角色不進抽獎池
   }
-  persist(); SFX.gacha();
-  openDlg('抽獎結果', '<div id="gacha-grid"></div>'); renderShop();
-  res.forEach(({ c, isNew }) => { const d = el('div', 'rcard'); d.append(iconEl(c), el('div', 'rname', c.short || c.name), el('div', 'rdesc', stars(c.star) + (isNew ? ' NEW' : ''))); $('#gacha-grid').append(d); });
+  persist(); renderShop();
+  const showResult = () => {
+    openDlg('抽獎結果', '<div id="gacha-grid"></div>');
+    res.forEach(({ c, isNew }) => { const d = el('div', 'rcard'); d.append(iconEl(c), el('div', 'rname', c.short || c.name), el('div', 'rdesc', stars(c.star) + (isNew ? ' NEW' : ''))); $('#gacha-grid').append(d); });
+  };
+  const hi = res.filter(x => x.c.star >= 4);   // 抽到四星（含以上）才播動畫，其餘直接看結果
+  if (hi.length) playGachaFx(hi, showResult); else { SFX.gacha(); showResult(); }
 }
 
 // 設定
@@ -900,7 +941,7 @@ function showResult(win) {
     : `撐了 ${fmt(elapsed)}　第 ${waveIdx + 1}/${waves.length} 波　敵人剩餘 HP ${ehp}/${enemy.hp}<br>最高 chain ${maxChain}`;
   $('#result').hidden = false;
 }
-$('#res-again').onclick = startStage; $('#res-party').onclick = quit; $('#quit').onclick = quit;
+$('#res-again').onclick = startStage; $('#res-party').onclick = quit;
 
 /* ----- 更新 ----- */
 function update(dt) {

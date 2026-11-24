@@ -114,7 +114,6 @@
       <div><button id="res-again" class="primary">再挑戰</button> <button id="res-party" class="primary">回編成</button></div>
     </div>
   </div>
-  <button id="quit" class="back">離開關卡</button>
 </section>
 
 <!-- 遊玩前導 -->
@@ -162,6 +161,23 @@
     <div id="dlg-body"></div>
     <button id="dlg-ok" class="primary" hidden>確定</button>
   </div>
+</div>
+
+<!-- 抽到四星的抽獎動畫（script.js 的 playGachaFx）：蓄力 → 爆閃 → 立繪登場 -->
+<div id="gacha-fx" hidden>
+  <div class="gfx-rays"></div>
+  <div class="gfx-orb"></div>
+  <div class="gfx-ring"></div>
+  <div id="gfx-sparks"></div>
+  <div class="gfx-card">
+    <div id="gfx-art"></div>
+    <div id="gfx-stars"></div>
+    <div id="gfx-name"></div>
+    <div id="gfx-sub"></div>
+  </div>
+  <div class="gfx-flash"></div>
+  <p id="gfx-hint"></p>
+  <button id="gfx-skip" class="back">略過</button>
 </div>
 
 <div id="toast"></div>
