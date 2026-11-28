@@ -174,9 +174,10 @@ function getImg(src) {   // 圖片尚未載入或失敗時回傳 null，由呼�
   return e.ok ? e.i : null;
 }
 const SAVE_KEY = 'qunyou-game-v2';
-const save = { settings: { volume: .7, keys: { up: 'w', down: 's' }, touch: 'ud' }, party: [...DEFAULT_PARTY], bests: {},
+const save = { settings: { volume: .7, bgmVolume: .7, keys: { up: 'w', down: 's' }, touch: 'ud' }, party: [...DEFAULT_PARTY], bests: {},
   owned: {}, skillLv: {}, skillProg: {}, shards: 0, coins: CFG.START_COINS, tickets: { normal: CFG.START_TICKETS } };
 try { Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); save.settings.keys = { up: 'w', down: 's', ...save.settings.keys }; } catch (e) {}
+if (typeof save.settings.bgmVolume !== 'number') save.settings.bgmVolume = save.settings.volume;   // 舊存檔沒有 BGM 音量：沿用原本的音量值（volume 現在是「遊戲音效」音量）
 save.settings.touch = save.settings.touch === 'lr' ? 'lr' : 'ud';   // 手機操作：ud＝上下分割（上跳下掉）、lr＝左右分割（右跳左掉）；舊存檔沒有這項時用 ud
 CHARACTERS.forEach(c => { if (c.star === 3 && !save.owned[c.id]) save.owned[c.id] = 1; });   // 三星角色免費
 save.party = (save.party || []).slice(0, CFG.PARTY_SIZE).map(id => charById(id) && save.owned[id] > 0 ? id : null);
@@ -539,6 +540,7 @@ function playGachaFx(list, done) {
 // 設定
 function renderSettings() {
   $('#vol').value = Math.round(save.settings.volume * 100); $('#vol-v').textContent = $('#vol').value;
+  $('#bgm-vol').value = Math.round(save.settings.bgmVolume * 100); $('#bgm-vol-v').textContent = $('#bgm-vol').value;
   ['up', 'down'].forEach(k => $('#key-' + k).textContent = keyLabel(save.settings.keys[k]));
   $$('#touch-seg button').forEach(b => b.classList.toggle('on', b.dataset.touch === save.settings.touch));
   $('#touch-hint').textContent = TOUCH_HINT[save.settings.touch];
@@ -547,6 +549,7 @@ const TOUCH_HINT = { ud: '上半螢幕＝跳躍（空中再點＝二段跳）、
 $$('#touch-seg button').forEach(b => b.onclick = () => { save.settings.touch = b.dataset.touch; persist(); renderSettings(); });
 $('#vol').oninput = e => { save.settings.volume = e.target.value / 100; SFX.setVolume(save.settings.volume); $('#vol-v').textContent = e.target.value; persist(); };
 $('#vol').onchange = () => SFX.orb(3);
+$('#bgm-vol').oninput = e => { save.settings.bgmVolume = e.target.value / 100; SFX.setBgmVolume(save.settings.bgmVolume); $('#bgm-vol-v').textContent = e.target.value; persist(); };
 ['up', 'down'].forEach(k => $('#key-' + k).onclick = () => { bindingFor = k; $('#key-' + k).textContent = '請按下按鍵…'; });
 function finishBind(key) {
   const k = bindingFor, other = k === 'up' ? 'down' : 'up';
@@ -1107,7 +1110,7 @@ requestAnimationFrame(function loop(n) {
   if (screenId === 'game') { if (!paused) update(dt); draw(); }
   requestAnimationFrame(loop);
 });
-SFX.setVolume(save.settings.volume);
+SFX.setVolume(save.settings.volume); SFX.setBgmVolume(save.settings.bgmVolume);
 // 開場畫面（#loading）由 loader.js 預載圖片後切到 title
 
 /* ----- 沿用：陷阱（地鼠／火球／箭矢）判定與繪製、玩家與城堡繪製 ----- */
